@@ -9,7 +9,8 @@ int main(){
 	//===============================================================
 	// String Section:
 	//===============================================================
-	char *resourcesFile = {"chestHuntRes.rres"};
+	// Lista de Strings
+	//---------------------------------------------------------------
 	char *nomes[AUTHORS] = {
 		"Lead programmer: @AkrilaMayNotBeAvailable",
 		"Textures by: Robert (0x72)",
@@ -20,24 +21,78 @@ int main(){
 		"https://0x72.itch.io/dungeontileset-ii",
 		"Instagram: @williamabreuuu"
 	};
+	char *logoInit[AKATS_LOGO] = {
+		"Akats Development Team",
+		"@AkrilaMayNotBeAvailable",
+		"April Edition - Akats Game Challenge"
+	};
+	char *menuOptions[MAX_MENU_OP] = {
+		"Pressione N para iniciar",
+		"Pressione C para créditos",
+		"Pressione T para tutorial",
+		"Pressione Q para sair"
+	};
+	char *chestTitles[MAX_AWARDS] = {
+		"Caçador Novato",
+		"Quase-caçador",
+		"Verme da Masmorra",
+		"Cosplayer de Mimic",
+		"Onde esta meu baú?",
+		"EU QUERO PAUSAAAAR",
+		"Deus da caça de baús",
+		"Baú da Felicidade MAH OI!",
+		"Eu e meu amigo demônio",
+		"Quanto tempo se passou?",
+		"Infinitus Chestus",
+		"Padoru está chegando?",
+		"A Masmorra mais absurda",
+		"Quase enfrentando o limite",
+		"Mestre do Chest Hunter!"
+	};
+	char *tutorial[TUTORIAL_SIZE] = {
+		"Segure as setas para se mover!",
+		"Pegar baús aumenta sua velocidade até certo ponto!",
+		"O pequeno demônio causa instakill!",
+		"Armadilhas causam dano ao seu tempo.",
+		"Conforme o jogo avança o mapa fica mais caótico!",
+		"Aperte P para fechar a aplicação."
+	};
+	// Strings Simples
+	//---------------------------------------------------------------
+	char *resourcesFile = {"chest_hunter_res.rres"};
+	char *gameTitle = {"Chest Hunter Alpha Version 2023"};
+	char *identificator = malloc(MAX_STRING_ID * sizeof(char));
 	//===============================================================
 	SetRandomSeed(time(NULL));
 	// Initialize variables
 	int chestClock = 0;
+	int bonusClock = 0;
+	int frameCounter = 0;
 	int id = 0;
+	int curTitle = 0;
+	int name;
 	int i;
+
+	float moveDelay = 12.0f;
+	float currentDelay = 12.0f;
+	
 	// Screen Manager
-	Tela_e screen = INIT;
+	Tela_e screen = LOGO;
 	
 	// Main Variables Declaration:
 	Chest_t bau[MAX_CHEST] = { 0 };
 	Jogador_t jogador = { 0 };
 	Mapa_t *mapa = AllocMap(ALTURA, LARGURA);
+	Event_t trigger = { 0 };
+	AnimatedObj_t trap = { 0 };
+	Inimigo_t inimigo = { 0 };
 	Camera2D camera = { 0 };
 	Music bgm = { 0 };
 	
 	// Texture Variables Declaration:
-	Texture_t objeto = { 0 };
+	Rectangle basicFrameRect = { 0.0f, 0.0f, 16.0f, 16.0f };
+	
+	Texture2D akatsLogo = { 0 };
 	Texture_t piso = { 0 };
 	Texture_t parede = { 0 };
 	
@@ -45,10 +100,11 @@ int main(){
 	camera.target = jogador.pos;
 	camera.offset = (Vector2){ T_LARG/2, T_ALT/2 };
 	camera.rotation = 0.0f;
-	camera.zoom = 1.0f;
+	camera.zoom = 2.0f;
 	
 	// Game bgm Initialization
 	void *bgmRawData = NULL;
+	Sound chestSounds = { 0 };
 
 	//================================================================
 	// Window -> Textures, audios etc must be loaded after window.
@@ -56,14 +112,22 @@ int main(){
 	
 	InitAudioDevice();
 	
-	rresCentralDir dir = rresLoadCentralDirectory("chestHuntRes.rres");
-	
+	rresCentralDir dir = rresLoadCentralDirectory("chest_hunter_res.rres");
 	//======================================================
-	id = rresGetResourceId(dir, "box.png");
-	CarregaImagemRRes(resourcesFile, id, &objeto.tex[0]);
+	for(i = 0; i < MAX_CHEST; i++){
+		id = rresGetResourceId(dir, "Chest_Anim.png");
+		CarregaImagemRRes(resourcesFile, id, &bau[i].sprite);
+	}
+	id = rresGetResourceId(dir, "Goblin_Idle.png");
+	CarregaImagemRRes(resourcesFile, id, &jogador.sprite);
+	id = rresGetResourceId(dir, "Mini_demon_idle.png");
+	CarregaImagemRRes(resourcesFile, id, &inimigo.sprite);
 	//======================================================
-	id = rresGetResourceId(dir, "floor_1.png");
-	CarregaImagemRRes(resourcesFile, id, &piso.tex[0]);
+	for(i = 0, name = 1; i < 9; i++, name++){
+		sprintf(identificator, "floor_%i.png", name);
+		id = rresGetResourceId(dir, identificator);
+		CarregaImagemRRes(resourcesFile, id, &piso.tex[i]);
+	}
 	//======================================================
 	id = rresGetResourceId(dir, "paredeMeio.png");
 	CarregaImagemRRes(resourcesFile, id, &parede.tex[0]);
@@ -72,26 +136,52 @@ int main(){
 	id = rresGetResourceId(dir, "paredeEsq.png");
 	CarregaImagemRRes(resourcesFile, id, &parede.tex[2]);
 	//======================================================
-	id = rresGetResourceId(dir, "sprite.png");
-	CarregaImagemRRes(resourcesFile, id, &jogador.sprite);
+	id = rresGetResourceId(dir, "Trap.png");
+	CarregaImagemRRes(resourcesFile, id, &trap.sprite);
 	//======================================================
 	id = rresGetResourceId(dir, "BgMusic.mp3");
 	CarregaAudioRawData(resourcesFile, id, &bgmRawData, &bgm);
 	//======================================================
+	
+	Wave chestOpen = LoadWave("resources/BGM/chest_open_4.wav");
+	chestSounds = LoadSoundFromWave(chestOpen);
+	UnloadWave(chestOpen);
+	
+	akatsLogo = LoadTexture("resources/Texture/Akats_Dev_Logo.png");
+	
+	free(identificator);
+	
+	// Atribuição de Sprite Frame
+	jogador.spriteFrame = basicFrameRect;
+	trap.spriteFrame = basicFrameRect;
+	inimigo.spriteFrame = basicFrameRect;
+	for(i = 0; i < MAX_CHEST; i++){
+		bau[i].spriteFrame = basicFrameRect;
+	}
+	
 	SetMusicVolume(bgm, 0.3f);
 	PlayMusicStream(bgm);
 	
 	SetTargetFPS(FPS);
-	while(screen){
+	while(screen && !IsKeyPressed(KEY_P)){
 		switch(screen){
+			case LOGO:
+				if(FrameCounter(&frameCounter, FPS*5) || IsKeyPressed(KEY_ENTER)){
+					UnloadTexture(akatsLogo);
+					screen = INIT;
+				}
+				break;
 			case INIT: 			// Tela Inicial do jogo
 				InitHandler(&screen);
 				break;
 			case CREDITOS: 	// Créditos
 				if(IsKeyPressed(KEY_ENTER)) screen = INIT;
 				break;
+			case TUTORIAL:	// Basic Tutorial
+				if(IsKeyPressed(KEY_ENTER)) screen = INIT;
+				break;
 			case LOADING: 	// Verificações de dados
-				ReinitPlayer(&jogador);
+				ReinitPlayer(&jogador, &trigger, &curTitle);
 				RandomizeMap(mapa->matriz, ALTURA, LARGURA);
 				for(i = 0; i < 3; i++)
 					SmoothMapCellularAutomata(mapa->matriz, ALTURA, LARGURA);
@@ -100,10 +190,10 @@ int main(){
 				// Chest Initialization:
 				for(i = 0; i < MAX_CHEST; i++){
 					bau[i].pos = (Vector2){GetRandomValue(1, ALTURA-2)*16, GetRandomValue(1, LARGURA-2)*16 };
+					bau[i].spriteFrame = basicFrameRect;
 					if(CanSpawn(bau[i].pos, mapa->matriz)) bau[i].ativo = 1;
 					else i--;
 				}
-				
 				// Player Initialization
 				do{
 					jogador.pos = (Vector2){GetRandomValue(1, ALTURA-2)*16, GetRandomValue(1, LARGURA-2)*16 };
@@ -112,19 +202,44 @@ int main(){
 				screen = GAME;
 				break;
 			// Jogo
-			case GAME:
-			// Update Variables
+			case GAME: // Update Variables
 			UpdateMusicStream(bgm);
-			jogador.tempo--;
+			// Atualiza animações
+			UpdateTimedAnim(&jogador.spriteFrame, 4, &jogador.animClock, 10);
+			UpdateTimedAnim(&trap.spriteFrame, 4, &trap.animClock, 15);
+			UpdateTimedAnim(&inimigo.spriteFrame, 4, &inimigo.animClock, 10);
 			
+			// Atualiza Inimigos
+			if(inimigo.tempo <= 0){
+				ShouldSpawnEnemy(jogador.pos, mapa->matriz, LARGURA, ALTURA, &inimigo);
+				if(inimigo.tempo == 0){
+					inimigo.pos = (Vector2){ 0.0f, 0.0f };
+					inimigo.moveDelay = 0;
+				}
+			}
+			else{
+				inimigo.tempo--;
+			}
+			EnemyMovementLogic(jogador.pos, mapa->matriz, &inimigo.pos, &inimigo.moveDelay, &inimigo.spriteFrame.width);
+			EnemyCollision(&inimigo, jogador.pos, &jogador.tempo, trigger);
+			
+			// Event Handler
+			if(SpawnTrapStructure(&trigger, jogador, &curTitle)) TrapGenerator(mapa->matriz, LARGURA, ALTURA);
+			if(SpawnEnemyStructure(&trigger, jogador)) SpawnGenerator(mapa->matriz, LARGURA, ALTURA);
+			
+			// Chest Updater
 			ChangePositionRand(&chestClock, bau, MAX_CHEST, mapa->matriz);
-			ChestCollected(&jogador, bau, MAX_CHEST);
+			ChestCollected(&jogador, bau, MAX_CHEST, chestSounds, jogador.multiplicator);
 			
-			PlayerMovement(&jogador.pos, mapa->matriz);
+			// Player Updater
+			jogador.tempo--;
+			if(TookDamage(jogador.pos, mapa->matriz)) TrapDamage(&jogador.tempo, trap.animClock); 
+			PlayerMovement(&jogador.pos, mapa->matriz, &jogador.spriteFrame.width, &moveDelay, currentDelay);
+			MovementBonus(jogador.pos, &currentDelay, DELAY_SPD, &bonusClock, bau, MAX_CHEST, &jogador.multiplicator, &jogador.tempo);
 			
 			camera.target = (Vector2){ jogador.pos.x, jogador.pos.y };
 			
-			if(jogador.tempo == 0) screen = END;
+			if(jogador.tempo <= 0) screen = END;
 			break;
 			
 			case END:
@@ -133,75 +248,66 @@ int main(){
 			break;
 			
 			default: 
-			
 			break;
 		}
 		
 		// Drawing Ambient
 		BeginDrawing();
 		switch(screen){
+			case LOGO:
+				DrawAkatsTeam(logoInit, FONT_NORMAL_SIZE, T_LARG, T_ALT, AKATS_LOGO, akatsLogo);
+				break;
 			case INIT:
-				ClearBackground(BLACK);
-				DrawText("Chest Hunt Ver.0010", T_LARG/2 - (MeasureText("Chest Hunt Ver.0010", 30))/2, T_ALT/4, 30, GREEN);
-				DrawText("Pressione N para iniciar", T_LARG/2 - (MeasureText("Pressione N para iniciar", 20))/2, T_ALT/2, 20, RED);
-				DrawText("Pressione C para créditos", T_LARG/2 - (MeasureText("Pressione C para créditos", 20))/2, T_ALT/2 + 20, 20, RED);
-				DrawText("Pressione Q para sair", T_LARG/2 - (MeasureText("Pressione Q para sair", 20))/2, T_ALT/2 + 40, 20, RED);
-			break;
+				DrawTitleScreen(gameTitle, menuOptions, FONT_NORMAL_SIZE, T_LARG, T_ALT, MAX_MENU_OP);
+				break;
+			case TUTORIAL:
+				DrawTutorial(tutorial, FONT_NORMAL_SIZE, T_LARG, T_ALT, TUTORIAL_SIZE);
+				break;
 			case CREDITOS:	
-				ClearBackground(BLACK);
-				// Crédito para contribuições ao projeto:
 				DesenhaCreditos(nomes, links, FONT_NORMAL_SIZE, T_LARG, AUTHORS);
-			break;
+				break;
 			case GAME:
 				ClearBackground(BLACK);
 				
 				BeginMode2D(camera);
-					DrawMap(mapa, ALTURA, LARGURA, piso, parede);
+				
+					DrawMap(mapa, ALTURA, LARGURA, piso, parede, trap);
+					DrawChest(bau, MAX_CHEST, ASSET_SIZE);
+					DrawEnemy(inimigo, ASSET_SIZE);
+					DrawPlayer(jogador, ASSET_SIZE);
 					
-					for(i = 0; i < MAX_CHEST; i++){
-						if(bau[i].ativo)
-							DrawTextureV(objeto.tex[0], bau[i].pos, WHITE);
-					}
-					
-					DrawTextureV(jogador.sprite, jogador.pos, WHITE);
 				EndMode2D();
 				
-				//======================================================
-				DrawRectangle(0, T_ALT-20, T_LARG, 22, BLACK);	
-				DrawText(TextFormat("Score: %01i", jogador.pont), 10, T_ALT-20, 20, GREEN);
-				DrawText(TextFormat("Segundos: %01i", jogador.tempo/FPS), T_LARG - MeasureText("Segundos: 0000", 20), T_ALT-20, 20, GREEN);
-				//======================================================
-			break;
+				DrawCurrentStats(chestTitles, FONT_NORMAL_SIZE, T_LARG, T_ALT, jogador, MAX_AWARDS, curTitle);
+				break;
 			case END:
-				ClearBackground(BLACK);
-				DrawText("Game Over", T_LARG/2 - (MeasureText("Game Over", 20))/2, T_ALT/2, 20, RED);
-				DrawText("Pressione ENTER para voltar", 
-					T_LARG/2 - (MeasureText("Pressione ENTER para voltar", 20))/2, 
-					T_ALT/2-20, 
-					20, 
-					RED);
-				DrawText(
-					TextFormat("Sua Pontuação foi: %01i", jogador.pont), 
-					T_LARG/2 - (MeasureText("Sua Pontuação foi: 0", 20))/2, 
-					T_ALT-20, 
-					20, 
-					GREEN);
-			break;
+				DrawFinalStatus(chestTitles, FONT_NORMAL_SIZE, T_LARG, T_ALT, trigger, curTitle, jogador.pont);
+				break;
 			default:
-			break;
+				break;
 		}
 		EndDrawing();
 	}
 	
+	UnloadTexture(akatsLogo);
 	UnloadTexture(jogador.sprite);
+	UnloadSound(chestSounds);
+	UnloadTexture(trap.sprite);
+	UnloadTexture(inimigo.sprite);
+	
+	for(i = 0; i < MAX_CHEST; i++){
+		UnloadTexture(bau[i].sprite);
+	}
+	
 	for(i = 0; i < MAX_TEXTURES; i++){
-		UnloadTexture(objeto.tex[i]);
 		UnloadTexture(piso.tex[i]);
 		UnloadTexture(parede.tex[i]);
 	}
 	FreeMap(mapa);
 	MemFree(bgmRawData);
+	
 	CloseAudioDevice();
 	CloseWindow();
+	
 	return 0;
 }

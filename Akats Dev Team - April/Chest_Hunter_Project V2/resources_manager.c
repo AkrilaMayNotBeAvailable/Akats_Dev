@@ -1,13 +1,28 @@
-// @AkrilaMayNotBeAvailable - Akats Dev Team, Leader Dev
-/* Esse código foi feito com objetivos didáticos.
-* É estritamente proíbida a venda deste código.
-*/
 // RRes packager defines must come before include header_manager
 #define RRES_IMPLEMENTATION
 #define RRES_RAYLIB_IMPLEMENTATION
 
 #include "header_manager.h"
 #include "function_declaration.h"
+
+// Carrega Um sound effect do arquivo rres e atribui para uma struct Wave
+void CarregaSFXRRes(char *nomeArq, int id, Sound *sound){
+	//  Carrega dados do arquivo rres
+	rresResourceChunk chunk = rresLoadResourceChunk(nomeArq, id);
+	
+	// Descompacta chunck retorna sucesso ou erro
+	int loadResult = UnpackResourceChunk(&chunk); 
+	
+	// Carrega imagem da chunk encontrada
+	if(loadResult == RRES_SUCCESS){
+    Wave sfx = LoadWaveFromResource(chunk);
+    *sound = LoadSoundFromWave(sfx);
+    UnloadWave(sfx);
+  }
+   
+  // Descarrega dados dados do arquivo rres 
+  rresUnloadResourceChunk(chunk);
+}
 
 // Carrega Imagem de arquivo rres e atribui para uma Textura
 void CarregaImagemRRes(char *nomeArq, int id, Texture2D *texture){
